@@ -1,0 +1,10 @@
+.git
+.venv
+__pycache__
+**/__pycache__
+reports
+test_output
+.env
+*.pem
+*.key
+configs/inventory.json

@@ -1,127 +1,48 @@
-#!/bin/bash
-# ===============================================
-# 服务器健康检查脚本
-# 作者：SRE学员
-# 功能：检查服务器关键指标（CPU、内存、磁盘、负载）
-# ===============================================
-
-# ========== 1. 颜色定义 ==========
-# \033[0;31m 是 ANSI 转义码，用于输出彩色文字
-# RED = 红色，用于警告
-# GREEN = 绿色，用于正常状态
-# YELLOW = 黄色，用于提示
-# NC = No Color，用于重置颜色（结束彩色输出）
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
-
-# ========== 2. 定义检查函数 ==========
-
-# --- CPU 检查函数 ---
-# 思路：
-# 1. 用 top 命令获取 CPU 使用率
-# 2. 根据阈值判断是否需要警告
-check_cpu() {
-    # 方法：用 tr 把逗号转换成换行，再提取 us 字段
-    # top 输出: %Cpu(s):  0.6 us,  0.6 sy,  0.0 ni, 98.8 id, ...
-    cpu_usage=$(top -bn1 | grep "Cpu" | tr ',' '\n' | grep "us" | awk '{print $1}')
-
-    # 检查是否为空或非数字
-    if [ -z "$cpu_usage" ] || ! [[ "$cpu_usage" =~ ^[0-9.]+$ ]]; then
-        echo -e "${YELLOW}[信息] 无法获取 CPU 数据${NC}"
-        return
-    fi
-
-    # 判断阈值：使用率 > 80% 则警告
-    if (( $(echo "$cpu_usage > 80" | bc -l) )); then
-        echo -e "${RED}[警告] CPU 使用率: ${cpu_usage}%${NC}"
-    else
-        echo -e "${GREEN}[正常] CPU 使用率: ${cpu_usage}%${NC}"
-    fi
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+if [[ ${1:-} == --help ]]; then
+    echo '用法: bash health_check.sh；Linux /proc，CPU 采样 1 秒'
+    echo 'CPU_THRESHOLD/MEM_THRESHOLD/DISK_THRESHOLD/INODE_THRESHOLD=80；LOAD_THRESHOLD=1（每核负载）；DISK_PATH=/'
+    exit 0
+fi
+[[ $# == 0 && $(uname -s) == Linux ]] || { echo '错误: 仅支持 Linux，且不接受位置参数' >&2; exit 2; }
+status=0
+report() {
+    local label=$1 value=$2 threshold=$3 unit=$4
+    if [[ ! $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        printf '[UNKNOWN] %s: 采集失败\n' "$label"; status=2
+    elif awk -v v="$value" -v t="$threshold" 'BEGIN {exit !(v>t)}'; then
+        printf '[WARN] %s: %s%s (阈值 %s)\n' "$label" "$value" "$unit" "$threshold"
+        ((status != 0)) || status=1
+    else printf '[OK] %s: %s%s\n' "$label" "$value" "$unit"; fi
 }
-
-# --- 内存检查函数 ---
-# 思路：
-# 1. 用 free -m 获取内存信息（单位 MB）
-# 2. 计算使用率 = 已用 / 总计 * 100
-# 3. 根据阈值判断
-check_memory() {
-    # free -m: 以 MB 为单位显示内存
-    # 输出格式：
-    #               total        used        free      shared  buff/cache   available
-    # Mem:           1838         456         234          12         147         1234
-    # Swap:          2047           0         2047
-
-    # awk 'NR==2': 打印第 2 行（Mem 行）
-    # $2 是 total，$3 是 used
-    mem_total=$(free -m | awk 'NR==2 {print $2}')
-    mem_used=$(free -m | awk 'NR==2 {print $3}')
-
-    # scale=2: 保留 2 位小数
-    # 计算百分比：已用 / 总计 * 100
-    mem_percent=$(echo "scale=2; $mem_used * 100 / $mem_total" | bc)
-
-    # 判断阈值：使用率 > 80% 则警告
-    if (( $(echo "$mem_percent > 80" | bc -l) )); then
-        echo -e "${RED}[警告] 内存使用率: ${mem_percent}% (${mem_used}/${mem_total}MB)${NC}"
-    else
-        echo -e "${GREEN}[正常] 内存使用率: ${mem_percent}% (${mem_used}/${mem_total}MB)${NC}"
-    fi
-}
-
-# --- 磁盘检查函数 ---
-# 思路：
-# 1. 用 df -h / 获取根目录磁盘使用情况
-# 2. 提取使用率百分比
-# 3. 根据阈值判断
-check_disk() {
-    # df -h /: 查看根目录磁盘使用情况
-    # 输出格式：
-    # Filesystem      Size  Used Avail Use% Mounted on
-    # /dev/sda1       50G   20G   30G  40% /
-
-    # awk 'NR==2 {print $5}': 打印第 2 行第 5 列，即 "40%"
-    # sed 's/%//': 去掉 % 符号，转成数字 40
-    disk_usage=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-
-    # 磁盘可以直接用整数比较（不需要 bc）
-    if [ "$disk_usage" -gt 80 ]; then
-        echo -e "${RED}[警告] 磁盘使用率: ${disk_usage}%${NC}"
-    else
-        echo -e "${GREEN}[正常] 磁盘使用率: ${disk_usage}%${NC}"
-    fi
-}
-
-# --- 系统负载检查函数 ---
-# 负载平均值：1分钟、5分钟、15分钟的平均负载
-check_load() {
-    # uptime: 显示系统运行时间、登录用户数、负载平均值
-    # 输出格式： xx:xx:xx up xx days, xx:xx,  x users,  load average: 0.52, 0.58, 0.59
-
-    # awk -F'load average:' '{print $2}'
-    # -F: 指定分隔符为 "load average:"
-    # $2: 打印分隔后的第 2 部分，即 " 0.52, 0.58, 0.59"
-    load_avg=$(uptime | awk -F'load average:' '{print $2}')
-    echo -e "${GREEN}[正常] 系统负载: ${load_avg}${NC}"
-}
-
-# ========== 3. 主程序 ==========
-
-# 输出报告头部
-echo "=========================================="
-echo "       服务器健康检查报告"
-# date '+%Y-%m-%d %H:%M:%S' 格式化输出时间
-# %Y=年，%m=月，%d=日，%H=时，%M=分，%S=秒
-echo "       $(date '+%Y-%m-%d %H:%M:%S')"
-echo "=========================================="
-echo ""
-
-# 调用各个检查函数
-check_cpu      # 检查 CPU
-check_memory    # 检查内存
-check_disk      # 检查磁盘
-check_load      # 检查负载
-
-echo ""
-echo "检查完成"
+for threshold in "${CPU_THRESHOLD:-80}" "${MEM_THRESHOLD:-80}" "${DISK_THRESHOLD:-80}" "${INODE_THRESHOLD:-80}"; do
+    [[ $threshold =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v t="$threshold" 'BEGIN {exit !(t>=0 && t<=100)}' || { echo '错误: 百分比阈值必须在 0-100' >&2; exit 2; }
+done
+[[ ${LOAD_THRESHOLD:-1} =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo '错误: LOAD_THRESHOLD 必须为非负数字' >&2; exit 2; }
+cpu_snapshot() { awk '/^cpu / {s=0; for(i=2;i<=9;i++) s+=$i; print s, $5+$6; found=1; exit} END {if(!found) exit 1}' /proc/stat; }
+printf '服务器健康检查 %s\n' "$(date -u +%FT%TZ)"
+first=$(cpu_snapshot) || first=''
+sleep 1
+second=$(cpu_snapshot) || second=''
+cpu=''
+if [[ -n $first && -n $second ]]; then
+    cpu=$(awk -v a="$first" -v b="$second" 'BEGIN {split(a,x);split(b,y);d=y[1]-x[1]; if(d>0 && y[2]>=x[2]) printf "%.2f",100*(1-(y[2]-x[2])/d)}')
+fi
+report CPU "$cpu" "${CPU_THRESHOLD:-80}" '%'
+memory=$(awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2;found=1} END {if(t>0 && found && a<=t) printf "%.2f",100*(t-a)/t}' /proc/meminfo) || memory=''
+report 内存 "$memory" "${MEM_THRESHOLD:-80}" '%'
+for metric in disk inode; do
+    flags=-Pk; threshold=${DISK_THRESHOLD:-80}; label=磁盘
+    if [[ $metric == inode ]]; then flags=-Pi; threshold=${INODE_THRESHOLD:-80}; label=Inode; fi
+    value=$(df "$flags" -- "${DISK_PATH:-/}" | awk 'NR==2 {gsub(/%/,"",$5); print $5}') || value=''
+    report "$label" "$value" "$threshold" '%'
+done
+cores=$(getconf _NPROCESSORS_ONLN) || cores=''
+load=''
+if [[ $cores =~ ^[1-9][0-9]*$ ]]; then
+    load=$(awk -v n="$cores" 'NR==1 && $1 ~ /^[0-9]+[.][0-9]+$/ {printf "%.2f",$1/n}' /proc/loadavg) || load=''
+fi
+report '1分钟每核负载' "$load" "${LOAD_THRESHOLD:-1}" ''
+exit "$status"

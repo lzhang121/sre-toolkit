@@ -1,0 +1,15 @@
+{
+  "environments": {
+    "test": {
+      "hosts": {
+        "aws-test-01": {"address": "192.0.2.10", "port": 22, "user": "sreops"},
+        "aws-test-02": {"address": "192.0.2.11", "port": 22, "user": "sreops"}
+      },
+      "groups": {"web": ["aws-test-01", "aws-test-02"]},
+      "ssh_credential_id": "sre-test-ssh",
+      "known_hosts_credential_id": "sre-test-known-hosts",
+      "ssh_config_credential_id": "sre-test-ssh-config",
+      "approvers": "sre-approvers"
+    }
+  }
+}

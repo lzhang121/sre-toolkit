@@ -1,94 +1,32 @@
-#!/bin/bash
-# ===============================================
-# lib/notify.sh - 告警通知（钉钉/Webhook/邮件）
-# 用法: source lib/notify.sh
-# ===============================================
-
-# 钉钉机器人 Webhook URL（请替换为实际的）
-DINGTALK_WEBHOOK="${DINGTALK_WEBHOOK:-https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN}"
-DINGTALK_SECRET="${DINGTALK_SECRET:-YOUR_SECRET}"
-
-# 邮件配置
-SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
-SMTP_PORT="${SMTP_PORT:-25}"
-ALERT_EMAIL="${ALERT_EMAIL:-ops@example.com}"
-
-# === 钉钉通知 ===
+#!/usr/bin/env bash
+# 可选依赖 python3（JSON 编码）和 curl；不会自动发送告警。
 notify_dingtalk() {
-    local title=$1
-    local content=$2
-    
-    # 构造 JSON
-    local payload=$(cat <<EOF
-{
-    "msgtype": "markdown",
-    "markdown": {
-        "title": "${title}",
-        "text": "## ${title}\n\n${content}\n\n> 时间: $(date '+%Y-%m-%d %H:%M:%S')"
-    }
+    [[ -n ${DINGTALK_WEBHOOK:-} ]] || { echo '错误: 未配置 DINGTALK_WEBHOOK' >&2; return 2; }
+    # 不假装支持未实现的加签；配置了 secret 时明确拒绝发送。
+    [[ -z ${DINGTALK_SECRET:-} ]] || { echo '错误: 尚不支持钉钉加签机器人' >&2; return 2; }
+    local payload response
+    payload=$(python3 -c 'import json,sys; print(json.dumps({"msgtype":"markdown","markdown":{"title":sys.argv[1],"text":sys.argv[2]}}))' "$1" "$2") || return
+    response=$(curl --silent --show-error --fail --connect-timeout 5 --max-time 15 \
+        --proto '=https' -H 'Content-Type: application/json' --data-binary "$payload" -- "$DINGTALK_WEBHOOK") || return
+    printf '%s' "$response" | python3 -c 'import json,sys; r=json.load(sys.stdin); sys.exit(0 if r.get("errcode")==0 else 1)'
 }
-EOF
-)
-    
-    # 发送请求（需要 curl）
-    if command -v curl &>/dev/null; then
-        curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "$DINGTALK_WEBHOOK" >/dev/null 2>&1
-    else
-        echo "WARN: curl not found, skip dingtalk notify" >&2
-    fi
-}
-
-# === 通用 Webhook 通知 ===
 notify_webhook() {
-    local url=$1
-    local content=$2
-    
-    if [ -z "$url" ]; then
-        echo "ERROR: webhook URL is empty" >&2
-        return 1
-    fi
-    
-    local payload=$(cat <<EOF
-{
-    "timestamp": "$(date +%s)",
-    "level": "alert",
-    "message": "${content}",
-    "host": "$(hostname)"
+    local url=${1:-} content=${2:-} payload
+    [[ $url == https://* ]] || { echo '错误: Webhook 必须为 HTTPS URL' >&2; return 2; }
+    payload=$(python3 -c 'import json,socket,sys,time; print(json.dumps({"timestamp":int(time.time()),"level":"alert","message":sys.argv[1],"host":socket.gethostname()}))' "$content") || return
+    curl --silent --show-error --fail --connect-timeout 5 --max-time 15 \
+        --proto '=https' -H 'Content-Type: application/json' --data-binary "$payload" -- "$url" >/dev/null
 }
-EOF
-)
-    
-    curl -s -X POST \
-        -H "Content-Type: application/json" \
-        -d "$payload" \
-        "$url" >/dev/null 2>&1
-}
-
-# === 邮件通知（需要 mail 命令） ===
 notify_email() {
-    local subject=$1
-    local content=$2
-    
-    if command -v mail &>/dev/null; then
-        echo "$content" | mail -s "$subject" "$ALERT_EMAIL"
-    else
-        echo "WARN: mail command not found, skip email notify" >&2
-    fi
+    [[ -n ${ALERT_EMAIL:-} && $ALERT_EMAIL != -* ]] || { echo '错误: 未配置有效 ALERT_EMAIL' >&2; return 2; }
+    printf '%s\n' "$2" | mail -s "$1" "$ALERT_EMAIL"
 }
-
-# === 统一告警入口 ===
 alert() {
-    local level=$1      # info/warn/error
-    local title=$2
-    local content=$3
-    
-    case "$level" in
-        info)  echo -e "\033[0;34m[INFO]\033[0m $title: $content" ;;
-        warn)  echo -e "\033[0;33m[WARN]\033[0m $title: $content"; notify_dingtalk "[WARN] $title" "$content" ;;
-        error) echo -e "\033[0;31m[ERROR]\033[0m $title: $content"; notify_dingtalk "[ERROR] $title" "$content" ;;
-        *)     echo "$title: $content" ;;
+    local level=$1 title=$2 content=$3
+    printf '[%s] %s: %s\n' "$level" "$title" "$content" >&2
+    case $level in
+        info) return 0;;
+        warn|error) notify_dingtalk "[$level] $title" "$content";;
+        *) echo '错误: 不支持的告警级别' >&2; return 2;;
     esac
 }

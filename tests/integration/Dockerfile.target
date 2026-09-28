@@ -1,0 +1,21 @@
+ARG BASE=amazonlinux:2023
+FROM ${BASE}
+RUN dnf install -y python3 bash coreutils util-linux findutils procps-ng iproute \
+    tar gzip openssh-server sudo shadow-utils systemd && dnf clean all
+RUN useradd -m sreops && usermod -p '' sreops && \
+    mkdir -p /home/sreops/.ssh && chmod 700 /home/sreops/.ssh && \
+    chown -R sreops:sreops /home/sreops/.ssh && \
+    printf 'PasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/90-sre-test.conf && \
+    ssh-keygen -A && systemctl enable sshd
+COPY . /opt/sre-source
+RUN bash /opt/sre-source/admin/install-maintenance.sh sreops && \
+    mkdir -p /srv/sre-fixtures/source /srv/sre-fixtures/backups /srv/sre-fixtures/archive && \
+    printf 'restore-me\n' > /srv/sre-fixtures/source/config && \
+    printf 'expired\n' > /srv/sre-fixtures/archive/old.log && \
+    touch -t 202001010000 /srv/sre-fixtures/archive/old.log && \
+    cp /opt/sre-source/tests/integration/policy.json /etc/sre-toolkit/policy.json && \
+    chmod 600 /etc/sre-toolkit/policy.json && \
+    cp /opt/sre-source/tests/integration/sre-demo.service /etc/systemd/system/ && \
+    systemctl enable sre-demo
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

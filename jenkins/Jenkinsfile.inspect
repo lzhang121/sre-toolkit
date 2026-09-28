@@ -1,0 +1,55 @@
+pipeline {
+    // Single-node Jenkins: use the available built-in executor without a label.
+    agent any
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 90, unit: 'MINUTES')
+        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '100', artifactDaysToKeepStr: '30', artifactNumToKeepStr: '100'))
+    }
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['test', 'production'], description: 'Configured inventory environment')
+        string(name: 'TARGETS', defaultValue: 'web', description: 'Known host/group aliases, comma separated')
+        choice(name: 'TASK', choices: ['basic', 'system', 'storage', 'processes', 'network', 'logs', 'directory', 'service_status', 'dns', 'tcp', 'http', 'journal', 'access_log'], description: 'Read-only task')
+        text(name: 'TASK_PARAMS', defaultValue: '{}', description: 'Task-specific JSON object; see deployment guide')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                deleteDir()
+                script {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: scm.branches,
+                        extensions: scm.extensions,
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/lzhang121/sre-toolkit.git',
+                            credentialsId: scm.userRemoteConfigs[0].credentialsId,
+                            refspec: scm.userRemoteConfigs[0].refspec
+                        ]]
+                    ])
+                }
+            }
+        }
+        stage('Inspect') {
+            steps {
+                script {
+                    def ops = load 'jenkins/common.groovy'
+                    def settings = ops.prepare('run')
+                    ops.execute(settings)
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                if (fileExists('jenkins/common.groovy')) {
+                    def ops = load 'jenkins/common.groovy'
+                    ops.archive()
+                }
+            }
+        }
+    }
+}

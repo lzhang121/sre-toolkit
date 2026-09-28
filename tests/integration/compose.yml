@@ -1,0 +1,25 @@
+services:
+  target-a:
+    build:
+      context: ../..
+      dockerfile: tests/integration/Dockerfile.target
+      args:
+        BASE: ${SRE_TEST_BASE:-amazonlinux:2023}
+    privileged: true
+    cgroup: host
+    volumes: ['/sys/fs/cgroup:/sys/fs/cgroup:rw']
+    tmpfs: [/run, /run/lock]
+  target-b:
+    build:
+      context: ../..
+      dockerfile: tests/integration/Dockerfile.target
+      args:
+        BASE: ${SRE_TEST_BASE:-amazonlinux:2023}
+    privileged: true
+    cgroup: host
+    volumes: ['/sys/fs/cgroup:/sys/fs/cgroup:rw']
+    tmpfs: [/run, /run/lock]
+  controller:
+    build:
+      context: ../..
+      dockerfile: tests/integration/Dockerfile.controller

@@ -1,0 +1,79 @@
+// Configure Pipeline-from-SCM on a protected branch; restrict Configure/Replay.
+// Never use this privileged credential job for untrusted PR branches.
+pipeline {
+    // Single-node Jenkins: use the available built-in executor without a label.
+    agent any
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 16, unit: 'HOURS')
+        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '100', artifactDaysToKeepStr: '30', artifactNumToKeepStr: '100'))
+    }
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['test', 'production'], description: 'Configured inventory environment')
+        string(name: 'TARGETS', defaultValue: 'web', description: 'Known host/group aliases, comma separated')
+        choice(name: 'TASK', choices: ['service', 'backup', 'cleanup'], description: 'Allowlisted maintenance')
+        text(name: 'TASK_PARAMS', defaultValue: '{}', description: 'Task-specific JSON object')
+        booleanParam(name: 'APPLY', defaultValue: false, description: 'Request manual approval and apply; false is preview only')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                deleteDir()
+                script {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: scm.branches,
+                        extensions: scm.extensions,
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/lzhang121/sre-toolkit.git',
+                            credentialsId: scm.userRemoteConfigs[0].credentialsId,
+                            refspec: scm.userRemoteConfigs[0].refspec
+                        ]]
+                    ])
+                }
+            }
+        }
+        stage('Preview') {
+            steps {
+                script {
+                    def ops = load 'jenkins/common.groovy'
+                    def settings = ops.prepare('plan')
+                    ops.execute(settings)
+                    ops.archive()
+                }
+            }
+        }
+        stage('Approve and apply') {
+            when { expression { params.APPLY } }
+            steps {
+                script {
+                    def inventory = readJSON file: 'configs/inventory.json', returnPojo: true
+                    def settings = inventory.environments[params.ENVIRONMENT]
+                    def approval = readJSON file: 'reports/run/approval.json', returnPojo: true
+                    def approvedBy
+                    timeout(time: 30, unit: 'MINUTES') {
+                        approvedBy = input(
+                            message: "Apply ${approval.task} to ${approval.hosts.join(', ')}? Run ${approval.run_id}; commit ${approval.commit}; digest ${approval.digest}. Review archived index.html and approval.json for exact actions/files. Plans expire 30 minutes after creation.",
+                            ok: 'Apply approved plan',
+                            submitter: settings.approvers,
+                            submitterParameter: 'APPROVED_BY')
+                    }
+                    def ops = load 'jenkins/common.groovy'
+                    ops.execute(settings, true, approval.digest, approvedBy.toString())
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                if (fileExists('jenkins/common.groovy')) {
+                    def ops = load 'jenkins/common.groovy'
+                    ops.archive()
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,28 @@
+name: Shell checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shell lint
+        run: shellcheck -S warning bin/*.sh lib/*.sh setup.sh admin/*.sh tests/*.sh tests/integration/run.sh
+      - name: Isolated regression tests
+        run: |
+          bash tests/test_toolkit.sh
+          python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Ansible syntax
+        run: |
+          pip install -r requirements-controller.txt
+          ansible-playbook --syntax-check -i localhost, ansible/execute.yml -e '{"sre_targets":["localhost"],"sre_bundle":"/tmp/test.tar.gz","sre_run_id":"syntax","sre_argv":[],"sre_deadline":60}'
+      - name: Linux collection smoke test
+        shell: bash
+        run: |
+          result=0
+          bash bin/health_check.sh || result=$?
+          test "$result" -le 1

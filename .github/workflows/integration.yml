@@ -1,0 +1,24 @@
+name: Isolated SSH integration
+on:
+  workflow_dispatch:
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        base: ['amazonlinux:2023', 'rockylinux:9']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Two-host isolated test
+        env:
+          SRE_TEST_BASE: ${{ matrix.base }}
+        run: bash tests/integration/run.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-${{ strategy.job-index }}
+          path: test_output/integration

@@ -1,0 +1,8 @@
+#!/usr/bin/python3 -I
+"""Install root-owned at /usr/local/sbin/sre-maint. No PYTHONPATH inheritance."""
+import sys
+
+sys.path.insert(0, "/opt/sre-toolkit-privileged")
+from sretoolkit.privileged import main
+
+sys.exit(main())

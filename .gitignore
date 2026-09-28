@@ -42,3 +42,6 @@ credentials.json
 test_output/
 tmp/
 reports/*.html
+reports/
+.cache/
+.venv/

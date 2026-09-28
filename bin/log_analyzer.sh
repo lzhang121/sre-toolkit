@@ -1,73 +1,35 @@
-#!/bin/bash
-# ===============================================
-# 日志分析脚本
-# 统计访问日志中的关键信息
-# ===============================================
-
-# ========== 1. 获取日志文件路径 ==========
-# ${1:-默认值} = 如果参数1存在就用它，否则用默认值
-# 作用：允许用户指定日志文件，不指定则用默认路径
-LOG_FILE=${1:-/var/log/nginx/access.log}
-
-# ========== 2. 检查文件是否存在 ==========
-# -f: 测试是否为普通文件且存在
-if [ ! -f "$LOG_FILE" ]; then
-    echo "错误: 日志文件 $LOG_FILE 不存在"
-    exit 1    # 非 0 退出码表示异常退出
-fi
-
-# ========== 3. 输出报告标题 ==========
-echo "=========================================="
-echo "       日志分析报告"
-echo "=========================================="
-
-# ========== 4. 统计总请求数 ==========
-# wc -l: word count，统计行数
-# < 重定向：把文件内容传给 wc，而不是用管道
-total_requests=$(wc -l < "$LOG_FILE")
-echo "总请求数: $total_requests"
-
-# ========== 5. 统计 HTTP 状态码 ==========
-# 状态码分布能反映网站健康状况
-# 200=成功, 404=资源不存在, 500=服务器错误
-echo ""
-echo "状态码统计:"
-
-# 管道分析：
-# awk '{print $9}'      → 提取每行的第9列（状态码）
-# sort                   → 排序（让相同状态码聚在一起）
-# uniq -c                → 去重并计数（-c 显示每个出现次数）
-# sort -rn               → 按数字(-n)倒序(r)排列，次数多的在前
-# head -10               → 只显示前10行
-awk '{print $9}' "$LOG_FILE" | sort | uniq -c | sort -rn | head -10
-
-# ========== 6. 统计 Top 10 请求 IP ==========
-# 找出访问量最大的 IP，可用于发现爬虫或攻击
-echo ""
-echo "Top 10 请求 IP:"
-
-# $1 = 第1列 = 客户端 IP
-awk '{print $1}' "$LOG_FILE" | sort | uniq -c | sort -rn | head -10
-
-# ========== 7. 统计 Top 10 请求路径 ==========
-# 找出最受欢迎的页面
-echo ""
-echo "Top 10 请求路径:"
-
-# $7 = 第7列 = 请求路径（如 /index.html）
-awk '{print $7}' "$LOG_FILE" | sort | uniq -c | sort -rn | head -10
-
-# ========== 8. 统计 404 错误 ==========
-# 404 表示页面不存在，可能有死链
-echo ""
-# awk '$9 == 404': 只处理第9列等于404的行
-# wc -l: 统计这些行有多少
-error_404=$(awk '$9 == 404' "$LOG_FILE" | wc -l)
-echo "404 错误数: $error_404"
-
-# ========== 9. 统计 5xx 错误 ==========
-# 5xx 表示服务器错误，需要重点关注
-echo ""
-# awk '$9 >= 500 && $9 < 600': 第9列在500-599之间（500, 502, 503, 504等）
-error_5xx=$(awk '$9 >= 500 && $9 < 600' "$LOG_FILE" | wc -l)
-echo "5xx 错误数: $error_5xx"
+#!/usr/bin/env bash
+# 支持标准 combined/common access log；不支持 JSON 或自定义字段布局。
+set -euo pipefail
+export LC_ALL=C
+if [[ ${1:-} == --help ]]; then echo '用法: bash log_analyzer.sh [access.log]（common/combined 格式）'; exit 0; fi
+log_file=${1:-/var/log/nginx/access.log}
+[[ $# -le 1 && -f $log_file && -r $log_file ]] || { echo '错误: 需要可读的普通日志文件' >&2; exit 2; }
+# 单次扫描；Top 表在临时文件中排序，避免 head 引发 SIGPIPE。
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+awk -v dir="$tmp" '
+{
+    total++
+    split($0,q,"\"")
+    request_count=split(q[2],r," ")
+    split(q[3],s," ")
+    if ($0 !~ /^[^ ]+ [^ ]+ [^ ]+ \[[^]]+\] "/ || request_count!=3 || r[3] !~ /^HTTP\/[0-9.]+$/ || s[1] !~ /^[1-5][0-9][0-9]$/) {invalid++; next}
+    valid++; codes[s[1]]++; ips[$1]++; paths[r[2]]++
+    if(s[1]==404) e404++
+    if(s[1]>=500) e5xx++
+}
+END {
+    printf "总行数: %d\n总请求数: %d\n无效行数: %d\n404 错误数: %d\n5xx 错误数: %d\n",total,valid,invalid,e404,e5xx
+    for(k in codes) print codes[k],k > (dir "/codes")
+    for(k in ips) print ips[k],k > (dir "/ips")
+    for(k in paths) print paths[k],k > (dir "/paths")
+    print invalid+0 > (dir "/invalid")
+}' < "$log_file"
+for table in codes ips paths; do
+    case $table in codes) echo '状态码统计:';; ips) echo 'Top 10 请求 IP:';; paths) echo 'Top 10 请求路径:';; esac
+    if [[ -f $tmp/$table ]]; then sort -k1,1nr -k2 "$tmp/$table" | sed -n '1,10p'; fi
+done
+[[ $(cat "$tmp/invalid") == 0 ]] || exit 1

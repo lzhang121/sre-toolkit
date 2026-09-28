@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "services": {"sre-demo": ["start", "stop", "restart"]},
+  "backups": [{"source": "/srv/sre-fixtures/source", "destination": "/srv/sre-fixtures/backups"}],
+  "cleanup": [{"directory": "/srv/sre-fixtures/archive", "pattern": "*.log", "min_days": 7, "max_files": 10, "max_bytes": 1048576}]
+}

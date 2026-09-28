@@ -1,0 +1,2 @@
+# Controller Python 3.12; target hosts use /usr/bin/python3 (3.9).
+ansible-core==2.19.13

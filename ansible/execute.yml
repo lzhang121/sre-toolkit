@@ -1,0 +1,32 @@
+---
+- name: Execute fixed SRE tasks
+  hosts: "{{ sre_targets }}"
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Create private run directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: "sre-{{ sre_run_id }}-"
+      register: sre_temp
+
+    - name: Execute in private directory
+      block:
+        - name: Distribute fixed bundle
+          ansible.builtin.unarchive:
+            src: "{{ sre_bundle }}"
+            dest: "{{ sre_temp.path }}"
+            mode: "u=rwX,go="
+
+        - name: SRE_EXECUTE
+          ansible.builtin.command:
+            argv: "{{ ['/usr/bin/timeout', '--kill-after=5', sre_deadline | string] + sre_argv + ['--host', inventory_hostname] }}"
+            chdir: "{{ sre_temp.path }}"
+          register: sre_execution
+          changed_when: false
+          failed_when: false
+      always:
+        - name: Remove private run directory
+          ansible.builtin.file:
+            path: "{{ sre_temp.path }}"
+            state: absent

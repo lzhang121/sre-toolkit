@@ -1,0 +1,7 @@
+[Unit]
+Description=SRE isolated integration fixture
+[Service]
+ExecStart=/usr/bin/sleep infinity
+Restart=no
+[Install]
+WantedBy=multi-user.target

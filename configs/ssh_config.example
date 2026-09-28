@@ -1,0 +1,5 @@
+# Administrator-controlled SSH config. An empty file is sufficient for direct SSH.
+# Verify the bastion host key in the Jenkins known_hosts credential too.
+# Host 10.*
+#     ProxyJump sreops@bastion.example.com
+#     ForwardAgent no
