@@ -88,7 +88,9 @@ AWS 网络建议：这台 Jenkins 放在可达目标私网地址的 VPC/网络�
 
 ## 3. 清单与 SSH 凭据
 
-复制 `configs/inventory.example.json` 为 `configs/inventory.json`，填入真实主机别名、私网 IP、SSH 端口、普通账号、业务分组及环境。此文件不存密码或私钥，可在受保护的运维仓库中版本管理；控制其可见范围。
+当前 `configs/inventory.json` 已配置 `test` 环境的 `10.172.36.7`，SSH 端口为 `22`，用户为 `ec2-user`。主机标识直接使用 IP，无需额外起名字或创建分组；两条 Pipeline 的 `TARGETS` 默认值也是该 IP。新增机器时按相同格式增加 IP 条目，用户填写 `ec2-user`。
+
+清单中的 `sre-test-ssh`、`sre-test-known-hosts`、`sre-test-ssh-config` 和 `sre-approvers` 仍是待配置的凭据 ID / 审批组名称，需要在 Jenkins 创建或替换为现有实际 ID；GitHub 拉代码凭据不能代替目标机 SSH 私钥。此文件不存密码或私钥，可在受保护的运维仓库中版本管理；控制其可见范围。新环境的结构参考 `configs/inventory.example.json`。
 
 `TARGETS` 只接受已有别名/分组的逗号列表，如 `web` 或 `aws-test-01,aws-test-02`，不接受通配符、Ansible pattern、临时 IP。最多选择 50 台。主机集合在准备阶段固定，不会在审批后重新扩展分组。
 

@@ -1,0 +1,14 @@
+{
+  "environments": {
+    "test": {
+      "hosts": {
+        "10.172.36.7": {"address": "10.172.36.7", "port": 22, "user": "ec2-user"}
+      },
+      "groups": {},
+      "ssh_credential_id": "sre-test-ssh",
+      "known_hosts_credential_id": "sre-test-known-hosts",
+      "ssh_config_credential_id": "sre-test-ssh-config",
+      "approvers": "sre-approvers"
+    }
+  }
+}
