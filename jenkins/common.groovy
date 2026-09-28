@@ -1,11 +1,24 @@
 // Loaded only from the same protected SCM revision as the Jenkinsfile.
-def prepare(String phase) {
-    def inventory = readJSON file: 'configs/inventory.json', returnPojo: true
-    def settings = inventory.environments[params.ENVIRONMENT]
-    if (!settings) { error('Environment is not configured') }
-    for (key in ['ssh_credential_id', 'known_hosts_credential_id', 'ssh_config_credential_id', 'approvers']) {
-        if (!settings[key]) { error("Missing environment setting: ${key}") }
+// Parse JSON in the existing Python runtime; no Pipeline Utility Steps needed.
+def configFields(String kind, String path) {
+    def output
+    withEnv(["SRE_CONFIG_KIND=${kind}", "SRE_CONFIG_FILE=${path}", "SRE_ENV=${params.ENVIRONMENT}"]) {
+        output = sh(returnStdout: true, encoding: 'UTF-8', script: '''#!/usr/bin/env bash
+set -euo pipefail
+python3 -m sretoolkit.jenkins_config "$SRE_CONFIG_KIND" "$SRE_CONFIG_FILE" "$SRE_ENV"
+''')
     }
+    def values = [:]
+    for (line in output.trim().split('\n')) {
+        def pair = line.split('\t', 2)
+        if (pair.length != 2) { error('Invalid configuration response') }
+        values[pair[0]] = pair[1]
+    }
+    return values
+}
+
+def prepare(String phase) {
+    def settings = configFields('environment', 'configs/inventory.json')
     withEnv(["SRE_ENV=${params.ENVIRONMENT}", "SRE_TARGETS=${params.TARGETS}",
              "SRE_TASK=${params.TASK}", "SRE_PARAMS=${params.TASK_PARAMS}", "SRE_PHASE=${phase}"]) {
         sh '''#!/usr/bin/env bash

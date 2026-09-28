@@ -49,18 +49,17 @@ pipeline {
             when { expression { params.APPLY } }
             steps {
                 script {
-                    def inventory = readJSON file: 'configs/inventory.json', returnPojo: true
-                    def settings = inventory.environments[params.ENVIRONMENT]
-                    def approval = readJSON file: 'reports/run/approval.json', returnPojo: true
+                    def ops = load 'jenkins/common.groovy'
+                    def settings = ops.configFields('environment', 'configs/inventory.json')
+                    def approval = ops.configFields('approval', 'reports/run/approval.json')
                     def approvedBy
                     timeout(time: 30, unit: 'MINUTES') {
                         approvedBy = input(
-                            message: "Apply ${approval.task} to ${approval.hosts.join(', ')}? Run ${approval.run_id}; commit ${approval.commit}; digest ${approval.digest}. Review archived index.html and approval.json for exact actions/files. Plans expire 30 minutes after creation.",
+                            message: "Apply ${approval.task} to ${approval.hosts}? Run ${approval.run_id}; commit ${approval.commit}; digest ${approval.digest}. Review archived index.html and approval.json for exact actions/files. Plans expire 30 minutes after creation.",
                             ok: 'Apply approved plan',
                             submitter: settings.approvers,
                             submitterParameter: 'APPROVED_BY')
                     }
-                    def ops = load 'jenkins/common.groovy'
                     ops.execute(settings, true, approval.digest, approvedBy.toString())
                 }
             }

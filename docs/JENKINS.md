@@ -106,7 +106,7 @@ Host key 必须经控制台、CMDB 或可信渠道校验；不要直接信任未
 
 ## 4. 两个 Jenkins Job
 
-安装/启用 Pipeline、Pipeline Input Step、Credentials Binding、SSH Credentials、Pipeline Utility Steps、Git、Timestamper。HTML 报告直接归档下载，不要求 HTML Publisher，不需要放宽 Jenkins CSP。
+安装/启用 Pipeline、Pipeline Input Step、Credentials Binding、SSH Credentials、Git、Timestamper。不再依赖 Pipeline Utility Steps：JSON 由 Python 标准库解析，使用已有的 `sh` 步骤传回必要字段，无需安装 JSON 插件或批准 Groovy JSON 解析器。HTML 报告直接归档下载，不要求 HTML Publisher，不需要放宽 Jenkins CSP。
 
 创建两个 **Pipeline script from SCM** Job，使用同一受保护分支：
 
