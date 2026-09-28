@@ -2,7 +2,7 @@
   "environments": {
     "test": {
       "hosts": {
-        "10.172.36.7": {"address": "10.172.36.7", "port": 22, "user": "ec2-user"}
+        "10.172.36.7": {"address": "10.178.42.150", "port": 22, "user": "ec2-user"}
       },
       "groups": {},
       "ssh_credential_id": "sre-test-ssh",
