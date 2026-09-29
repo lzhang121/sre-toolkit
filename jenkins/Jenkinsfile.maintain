@@ -12,7 +12,25 @@ pipeline {
     }
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['test', 'production'], description: 'Configured inventory environment')
-        string(name: 'TARGETS', defaultValue: '10.172.36.7', description: 'Inventory host IPs, comma separated')
+        choice(name: 'TARGETS', choices: [
+            '10.178.42.150',
+            '10.188.55.99',
+            '10.188.60.236',
+            '10.172.33.162',
+            '10.172.44.36',
+            '10.188.43.34',
+            '10.188.42.22',
+            '10.188.47.213',
+            '10.192.32.60',
+            '10.172.37.237',
+            '10.192.45.156',
+            '10.192.38.69',
+            '10.192.38.127',
+            '10.192.30.220',
+            '10.178.39.88',
+            '10.178.35.97',
+            '10.178.32.64'
+        ], description: 'Select one inventory host IP')
         choice(name: 'TASK', choices: ['service', 'backup', 'cleanup'], description: 'Allowlisted maintenance')
         text(name: 'TASK_PARAMS', defaultValue: '{}', description: 'Task-specific JSON object')
         booleanParam(name: 'APPLY', defaultValue: false, description: 'Request manual approval and apply; false is preview only')
@@ -28,8 +46,7 @@ pipeline {
                         extensions: scm.extensions,
                         userRemoteConfigs: [[
                             url: 'https://github.com/lzhang121/sre-toolkit.git',
-                            credentialsId: scm.userRemoteConfigs[0].credentialsId,
-                            refspec: scm.userRemoteConfigs[0].refspec
+                            credentialsId: '5534438f-2103-424f-b35b-8d17a4c5db42'
                         ]]
                     ])
                 }
