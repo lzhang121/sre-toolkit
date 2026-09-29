@@ -8,7 +8,7 @@ pipeline {
         disableConcurrentBuilds()
         timestamps()
         timeout(time: 16, unit: 'HOURS')
-        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '100', artifactDaysToKeepStr: '30', artifactNumToKeepStr: '100'))
+        buildDiscarder(logRotator(daysToKeepStr: '5', numToKeepStr: '5', artifactDaysToKeepStr: '10', artifactNumToKeepStr: '20'))
     }
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['test', 'production'], description: 'Configured inventory environment')
