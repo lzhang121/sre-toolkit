@@ -10,7 +10,26 @@ pipeline {
     }
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['test', 'production'], description: 'Configured inventory environment')
-        string(name: 'TARGETS', defaultValue: '10.178.42.150', description: 'Inventory host IPs, comma separated')
+        choice(name: 'TARGETS', choices: [
+            '10.178.42.150',
+            '10.188.55.99',
+            '10.188.60.236',
+            '10.172.33.162',
+            '10.172.44.36',
+            '10.188.43.34',
+            '10.188.42.22',
+            '10.188.47.213',
+            '10.172.36.7',
+            '10.192.32.60',
+            '10.172.37.237',
+            '10.192.45.156',
+            '10.192.38.69',
+            '10.192.38.127',
+            '10.192.30.220',
+            '10.178.39.88',
+            '10.178.35.97',
+            '10.178.32.64'
+        ], description: 'Select one inventory host IP')
         choice(name: 'TASK', choices: ['basic', 'system', 'storage', 'processes', 'network', 'logs', 'directory', 'service_status', 'dns', 'tcp', 'http', 'journal', 'access_log'], description: 'Read-only task')
         text(name: 'TASK_PARAMS', defaultValue: '{}', description: 'Task-specific JSON object; see deployment guide')
     }
