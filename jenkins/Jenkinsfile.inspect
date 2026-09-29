@@ -25,8 +25,7 @@ pipeline {
                         extensions: scm.extensions,
                         userRemoteConfigs: [[
                             url: 'https://github.com/lzhang121/sre-toolkit.git',
-                            credentialsId: scm.userRemoteConfigs[0].credentialsId,
-                            refspec: scm.userRemoteConfigs[0].refspec
+                            credentialsId: '5534438f-2103-424f-b35b-8d17a4c5db42'
                         ]]
                     ])
                 }
