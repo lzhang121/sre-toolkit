@@ -48,6 +48,17 @@ pipeline {
                 if (fileExists('jenkins/common.groovy')) {
                     def ops = load 'jenkins/common.groovy'
                     ops.archive()
+                    if (fileExists('reports/run/index.html')) {
+                        publishHTML(target: [
+                            reportDir: 'reports/run',
+                            reportFiles: 'index.html',
+                            reportName: 'SRE Report',
+                            includes: '*.html',
+                            keepAll: true,
+                            alwaysLinkToLastBuild: true,
+                            allowMissing: false
+                        ])
+                    }
                 }
             }
         }
