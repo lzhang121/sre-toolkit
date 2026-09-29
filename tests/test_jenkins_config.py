@@ -22,6 +22,23 @@ class JenkinsConfigTests(unittest.TestCase):
         values = dict(line.split("\t", 1) for line in fields("approval", approval, "test").splitlines())
         self.assertEqual(values, dict(task="cleanup", hosts="a, b", run_id="r", commit="abc", digest="123"))
 
+    def test_target_credentials_and_mixed_group(self):
+        settings = dict(self.settings(), hosts={
+            host: dict(address="192.0.2." + str(index), port=22, user="ec2-user")
+            for index, host in enumerate(["a", "b", "c"], 1)
+        }, groups={"new": ["a", "b"], "mixed": ["a", "c"]},
+            ssh_credential_overrides={"a": "new-key", "b": "new-key"})
+        document = {"environments": {"test": settings}}
+        for targets, expected in [("a", "new-key"), ("new", "new-key"), ("c", "ssh-key")]:
+            wire = fields("environment", document, "test", targets)
+            self.assertEqual(dict(line.split("\t", 1) for line in wire.splitlines())["ssh_credential_id"], expected)
+        for targets in ["mixed", "a,c"]:
+            with self.assertRaisesRegex(ValueError, "different SSH credentials"):
+                fields("environment", document, "test", targets)
+        settings["ssh_credential_overrides"]["a"] = "key\ninjected\tvalue"
+        with self.assertRaisesRegex(ValueError, "invalid field"):
+            fields("environment", document, "test", "a")
+
     def test_missing_environment_and_fields_fail(self):
         for document in [{"environments": {}}, {"environments": {"test": {}}}]:
             with self.assertRaises(KeyError):

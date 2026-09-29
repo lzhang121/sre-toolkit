@@ -15,6 +15,7 @@
         "10.192.45.156": {"address": "10.192.45.156", "port": 22, "user": "ec2-user"},
         "10.192.38.69": {"address": "10.192.38.69", "port": 22, "user": "ec2-user"},
         "10.192.38.127": {"address": "10.192.38.127", "port": 22, "user": "ec2-user"},
+        "10.192.30.220": {"address": "10.192.30.220", "port": 22, "user": "ec2-user"},
         "10.178.39.88": {"address": "10.178.39.88", "port": 22, "user": "ec2-user"},
         "10.178.35.97": {"address": "10.178.35.97", "port": 22, "user": "ec2-user"},
         "10.178.32.64": {"address": "10.178.32.64", "port": 22, "user": "ec2-user"},
@@ -22,6 +23,16 @@
       },
       "groups": {},
       "ssh_credential_id": "sre-test-ssh",
+      "ssh_credential_overrides": {
+        "10.188.55.99": "sre-test01-ssh",
+        "10.188.60.236": "sre-test01-ssh",
+        "10.188.43.34": "sre-test01-ssh",
+        "10.188.42.22": "sre-test01-ssh",
+        "10.192.45.156": "sre-test01-ssh",
+        "10.192.38.127": "sre-test01-ssh",
+        "10.192.38.69": "sre-test01-ssh",
+        "10.192.30.220": "sre-test01-ssh"
+      },
       "known_hosts_credential_id": "sre-test-known-hosts",
       "ssh_config_credential_id": "sre-test-ssh-config",
       "approvers": "sre-approvers"

@@ -2,10 +2,11 @@
 // Parse JSON in the existing Python runtime; no Pipeline Utility Steps needed.
 def configFields(String kind, String path) {
     def output
-    withEnv(["SRE_CONFIG_KIND=${kind}", "SRE_CONFIG_FILE=${path}", "SRE_ENV=${params.ENVIRONMENT}"]) {
+    withEnv(["SRE_CONFIG_KIND=${kind}", "SRE_CONFIG_FILE=${path}", "SRE_ENV=${params.ENVIRONMENT}",
+             "SRE_TARGETS=${params.TARGETS}"]) {
         output = sh(returnStdout: true, encoding: 'UTF-8', script: '''#!/usr/bin/env bash
 set -euo pipefail
-python3 -m sretoolkit.jenkins_config "$SRE_CONFIG_KIND" "$SRE_CONFIG_FILE" "$SRE_ENV"
+python3 -m sretoolkit.jenkins_config "$SRE_CONFIG_KIND" "$SRE_CONFIG_FILE" "$SRE_ENV" --targets "$SRE_TARGETS"
 ''')
     }
     def values = [:]
